@@ -1,24 +1,25 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:harpy/core/core.dart';
 import 'package:harpy/harpy.dart';
+import 'package:intl/intl.dart';
 
 /// Parses the [ChangelogData] from a changelog file located in
 /// `android/fastlane/metadata/android/$flavor/en-US/changelogs/$versionCode.txt`.
-class ChangelogParser {
+class ChangelogParser with HarpyLogger {
   static const String linePrefix = '· ';
 
   /// Returns the [ChangelogData] for the current version.
   ///
   /// Returns `null` if the current version has no changelog file.
-  Future<ChangelogData> current() async {
-    return parse(app<HarpyInfo>().packageInfo.buildNumber);
+  Future<ChangelogData> current(BuildContext context) async {
+    return parse(context, app<HarpyInfo>().packageInfo.buildNumber);
   }
 
   /// Returns the [ChangelogData] for the [versionCode].
   ///
   /// Returns `null` if no corresponding changelog file exists.
-  Future<ChangelogData> parse(String versionCode) async {
+  Future<ChangelogData> parse(BuildContext context, String versionCode) async {
     try {
       final String changelogString = await rootBundle.loadString(
         _changelogString(versionCode),
@@ -35,10 +36,21 @@ class ChangelogParser {
       }
 
       final String headerString = changelogString.substring(0, entryStart);
+      final List<String> headerLines = _cleanEmptyLines(
+        headerString.split('\n'),
+      );
 
-      for (String line in headerString.split('\n')) {
-        line = line.trim();
-        if (line.isNotEmpty) {
+      for (int i = 0; i < headerLines.length; i++) {
+        final String line = headerLines[i].trim();
+
+        if (dateRegex.hasMatch(line)) {
+          // localize date format
+          data.headerLines.add(
+            DateFormat.yMMMd(Localizations.localeOf(context).languageCode)
+                .format(DateTime.parse(line)),
+          );
+        } else if (line.isNotEmpty || i != 0 || i != headerLines.length - 1) {
+          // only add empty lines if they are not the first or last line
           data.headerLines.add(line);
         }
       }
@@ -74,8 +86,11 @@ class ChangelogParser {
       }
 
       return data;
-    } catch (e) {
-      // changelog file not found
+    } on FlutterError {
+      // ignore asset not found exception (version has no changelog)
+      return null;
+    } catch (e, st) {
+      log.severe('error parsing changelog data', e, st);
       return null;
     }
   }
@@ -89,6 +104,29 @@ class ChangelogParser {
 
   ChangelogEntry _parseLine(String line) {
     return ChangelogEntry(line: line.trim());
+  }
+
+  List<String> _cleanEmptyLines(List<String> lines) {
+    lines = _trimLeadingLines(lines);
+    lines = _trimLeadingLines(lines.reversed.toList());
+    return lines.reversed.toList();
+  }
+
+  List<String> _trimLeadingLines(List<String> lines) {
+    final List<String> cleaned = <String>[];
+
+    bool ignore = true;
+    for (String line in lines) {
+      if (ignore && line.trim().isEmpty) {
+        continue;
+      }
+
+      ignore = false;
+
+      cleaned.add(line.trim());
+    }
+
+    return cleaned;
   }
 }
 

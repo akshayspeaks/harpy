@@ -5,6 +5,18 @@ class MediaPreferences {
 
   final ConnectivityService connectivityService = app<ConnectivityService>();
 
+  /// Whether the best media quality should be used.
+  ///
+  /// Right now this only affects the image quality because the second best
+  /// video / gif quality is way worse than the best video quality.
+  ///
+  /// 0: always use best quality
+  /// 1: only use best quality when using wifi
+  /// 2: never use best quality
+  int get bestMediaQuality => harpyPrefs.getInt('bestMediaQuality', 2);
+  set bestMediaQuality(int value) =>
+      harpyPrefs.setInt('bestMediaQuality', value);
+
   /// Whether gifs should play automatically.
   ///
   /// 0: always autoplay
@@ -39,8 +51,15 @@ class MediaPreferences {
   bool get shouldAutoplayVideos =>
       autoplayVideos == 0 || autoplayVideos == 1 && connectivityService.wifi;
 
+  /// Whether the best media quality should be used, taking the connectivity
+  /// into account.
+  bool get shouldUseBestMediaQuality =>
+      bestMediaQuality == 0 ||
+      bestMediaQuality == 1 && connectivityService.wifi;
+
   /// Sets all media settings to the default settings.
   void defaultSettings() {
+    bestMediaQuality = 2;
     autoplayMedia = 1;
     autoplayVideos = 2;
     openLinksExternally = false;
